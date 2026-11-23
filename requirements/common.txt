@@ -1,55 +1,126 @@
-regex # Replace re for higher-performance regex matching
-cachetools
-psutil
-sentencepiece  # Required for LLaMA tokenizer.
-numpy
-requests >= 2.26.0
-tqdm
-blake3
-py-cpuinfo
-transformers >= 5.5.3
-tokenizers >= 0.21.1  # Required for fast incremental detokenization.
-protobuf >= 5.29.6, !=6.30.*, !=6.31.*, !=6.32.*, !=6.33.0.*, !=6.33.1.*, !=6.33.2.*, !=6.33.3.*, !=6.33.4.* # Required by LlamaTokenizer, gRPC. CVE-2026-0994
-fastapi[standard] >= 0.115.0 # Required by FastAPI's form models in the OpenAI API server's audio transcriptions endpoint.
-aiohttp >= 3.13.3
-openai >= 1.99.1  # For Responses API with reasoning content
-pydantic >= 2.12.0
-prometheus_client >= 0.18.0
-pillow  # Required for image processing
-prometheus-fastapi-instrumentator >= 7.0.0
-tiktoken >= 0.6.0  # Required for DBRX tokenizer
+# Pinned to the validated environment (the python_env of the Qwen3.5-9B P150 release images = the public TT base
+# image 0.20.0-de59f8a-03fa3af's resolution, unchanged by the releases), so
+# an empty-target install (tt-model package, runtime.vllm.wheel) resolves the same set: tt-model's lock/overrides
+# do not apply to a wheel/path vLLM.  torch / torchvision / numpy pinned here too (ttnn's numpy<2, CPU torch 2.11.0).
+torch == 2.11.0
+numpy == 1.26.4
+regex == 2026.7.19
+cachetools == 7.1.7
+psutil == 7.2.2
+sentencepiece == 0.2.1
+numpy == 1.26.4
+requests == 2.32.3
+tqdm == 4.66.3
+blake3 == 1.0.9
+py-cpuinfo == 9.0.0
+transformers == 5.12.1
+tokenizers == 0.22.2
+protobuf == 7.35.1
+fastapi[standard] == 0.141.1
+aiohttp == 3.14.3
+openai == 3.0.0
+pydantic == 2.13.4
+prometheus_client == 0.26.0
+pillow == 12.3.0
+prometheus-fastapi-instrumentator == 8.1.0
+tiktoken == 0.7.0
 lm-format-enforcer == 0.11.3
-llguidance >= 1.3.0, < 1.4.0; platform_machine == "x86_64" or platform_machine == "arm64" or platform_machine == "aarch64" or platform_machine == "s390x" or platform_machine == "ppc64le"
+llguidance == 1.3.0; platform_machine == "x86_64" or platform_machine == "arm64" or platform_machine == "aarch64" or platform_machine == "s390x" or platform_machine == "ppc64le"
 outlines_core == 0.2.11
 # required for outlines backend disk cache
 diskcache == 5.6.3
 lark == 1.2.2
 xgrammar == 0.1.29; platform_machine == "x86_64" or platform_machine == "aarch64" or platform_machine == "arm64" or platform_machine == "s390x" or platform_machine == "ppc64le"
-typing_extensions >= 4.10
-filelock >= 3.16.1 # need to contain https://github.com/tox-dev/filelock/pull/317
-partial-json-parser # used for parsing partial JSON outputs
-pyzmq >= 25.0.0
-msgspec
-gguf >= 0.17.0
-mistral_common[image] >= 1.9.1
-opencv-python-headless >= 4.11.0    # required for video IO #NOTE Viktor Pus: Manual dependency hack to avoid collision with tt-metal numpy version requirement, see tt.txt
-pyyaml
-six>=1.16.0; python_version > '3.11' # transitive dependency of pandas that needs to be the latest version for python 3.12
-setuptools>=77.0.3,<81.0.0; python_version > '3.11' # Setuptools is used by triton, we need to ensure a modern version is installed for 3.12+ so that it does not try to import distutils, which was removed in 3.12
-einops # Required for Qwen2-VL.
-compressed-tensors == 0.13.0 # required for compressed-tensors
-depyf==0.20.0 # required for profiling and debugging with compilation config
-cloudpickle # allows pickling lambda functions in model_executor/models/registry.py
-watchfiles # required for http server to monitor the updates of TLS files
-python-json-logger # Used by logging as per examples/others/logging_configuration.md
-ninja # Required for xgrammar, rocm, tpu, xpu
-pybase64 # fast base64 implementation
-cbor2 # Required for cross-language serialization of hashable objects
-ijson # Required for mistral streaming tool parser
-setproctitle # Used to set process names for better debugging and monitoring
-openai-harmony >= 0.0.3  # Required for gpt-oss
-anthropic >= 0.71.0
-model-hosting-container-standards >= 0.1.13, < 1.0.0
-mcp
-grpcio
-grpcio-reflection
+typing_extensions == 4.16.0
+filelock == 3.32.3
+partial-json-parser == 0.2.1.1.post7
+pyzmq == 27.1.0
+msgspec == 0.21.1
+gguf == 0.19.0
+mistral_common[image] == 1.11.7
+opencv-python-headless == 4.11.0.86
+pyyaml == 6.0.3
+six == 1.17.0; python_version > "3.11"
+setuptools == 80.10.2; python_version > "3.11"
+einops == 0.6.1
+compressed-tensors == 0.13.0
+depyf == 0.20.0
+cloudpickle == 3.1.2
+watchfiles == 1.2.0
+python-json-logger == 4.1.0
+ninja == 1.13.0
+pybase64 == 1.5.0
+cbor2 == 6.1.4
+ijson == 3.5.1
+setproctitle == 1.3.7
+openai-harmony == 0.0.8
+anthropic == 0.122.0
+model-hosting-container-standards == 0.1.16
+mcp == 2.0.0
+grpcio == 1.83.0
+grpcio-reflection == 1.83.0
+# Transitive packages of the resolution above, pinned to the same validated environment (the release python_env): a
+# free resolution drifted 62 of them, e.g. huggingface-hub 1.16.1 -> 1.33.0, whose offline snapshot_download refuses
+# the allow_patterns-pinned snapshot tt-model prefetches (IncompleteSnapshotError in vLLM's get_model_path).
+# Not pinned: pyjwt (the release images have 2.7.0, which violates mcp 2.0.0's pyjwt>=2.10.1; pip check flags it there too).
+annotated-doc == 0.0.5
+anyio == 4.14.2
+certifi == 2026.7.22
+charset-normalizer == 3.5.0
+click == 8.1.7
+cryptography == 50.0.0
+detect-installer == 0.1.0
+dill == 0.3.8
+distlib == 0.4.3
+email-validator == 2.3.0
+exceptiongroup == 1.3.1
+fastapi-cli == 0.0.32
+fastapi-cloud-cli == 0.23.0
+fastar == 0.11.0
+fonttools == 4.63.0
+fsspec == 2023.9.2
+hf-xet == 1.6.0
+httpcore2 == 2.10.0
+httptools == 0.8.0
+httpx2 == 2.10.0
+huggingface_hub == 1.16.1
+identify == 2.6.19
+idna == 3.18
+jiter == 0.16.0
+kiwisolver == 1.5.0
+loguru == 0.6.0
+markdown-it-py == 3.0.0
+MarkupSafe == 3.0.3
+mdit-py-plugins == 0.6.1
+multidict == 6.7.1
+networkx == 3.1
+nodeenv == 1.10.0
+opentelemetry-api == 1.44.0
+platformdirs == 3.11.0
+pre-commit == 3.5.0
+propcache == 0.5.2
+pycparser == 3.0
+Pygments == 2.20.0
+pyparsing == 3.3.2
+python-dateutil == 2.9.0.post0
+python-discovery == 1.5.2
+python-dotenv == 1.2.2
+pytz == 2026.3.post1
+rich-toolkit == 0.20.3
+sentry-sdk == 2.68.0
+sse-starlette == 3.4.8
+starlette == 1.6.0
+tomli == 2.4.1
+triton == 3.7.1
+truststore == 0.10.4
+tt-umd == 0.9.9
+typer == 0.27.1
+typing-inspection == 0.4.4
+tzdata == 2026.3
+urllib3 == 2.7.0
+uvicorn == 0.52.3
+uvloop == 0.22.1
+virtualenv == 21.7.4
+websockets == 16.0
+wheel == 0.45.1
+yarl == 1.24.5
