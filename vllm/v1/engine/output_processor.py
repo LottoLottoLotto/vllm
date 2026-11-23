@@ -589,9 +589,10 @@ class OutputProcessor:
     ) -> OutputProcessorOutput:
         """
         Process the EngineCoreOutputs:
-        1) Compute stats for logging
-        2) Detokenize
-        3) Create and handle RequestOutput objects:
+        1) Detokenize and apply stop boundaries
+        2) Compute logprobs
+        3) Compute stats for logging
+        4) Create and handle RequestOutput objects:
             * If there is a queue (for usage with AsyncLLM),
               put the RequestOutput objects into the queue for
               handling by the per-request generate() tasks.
@@ -618,11 +619,6 @@ class OutputProcessor:
                 # Ignore output for already-aborted request.
                 continue
 
-            # 1) Compute stats for this iteration.
-            self._update_stats_from_output(
-                req_state, engine_core_output, engine_core_timestamp, iteration_stats
-            )
-
             new_token_ids = engine_core_output.new_token_ids
             pooling_output = engine_core_output.pooling_output
             finish_reason = engine_core_output.finish_reason
@@ -630,22 +626,44 @@ class OutputProcessor:
             kv_transfer_params = engine_core_output.kv_transfer_params
             routed_experts = engine_core_output.routed_experts
             req_state.num_cached_tokens = engine_core_output.num_cached_tokens
-            req_state.is_prefilling = False
 
             if pooling_output is None:
                 assert req_state.detokenizer is not None
                 assert req_state.logprobs_processor is not None
-                # 2) Detokenize the token ids into text and perform stop checks.
+                # 1) Detokenize the token ids into text and perform stop checks.
+                num_output_tokens = req_state.detokenizer.num_output_tokens()
                 stop_string = req_state.detokenizer.update(
                     new_token_ids, finish_reason == FinishReason.STOP
                 )
                 if stop_string:
                     finish_reason = FinishReason.STOP
                     stop_reason = stop_string
+                    # A stop string can terminate inside a speculative batch.
+                    # Trim before accumulating logprobs or reporting token IDs
+                    # and usage; the terminal token itself still counts.
+                    num_new_tokens = (
+                        req_state.detokenizer.num_output_tokens() - num_output_tokens
+                    )
+                    if num_new_tokens < len(new_token_ids):
+                        new_token_ids = new_token_ids[:num_new_tokens]
+                        engine_core_output.new_token_ids = new_token_ids
+                        if engine_core_output.new_logprobs is not None:
+                            engine_core_output.new_logprobs = (
+                                engine_core_output.new_logprobs.slice_request(
+                                    0, num_new_tokens
+                                )
+                            )
 
-                # 3) Compute sample and prompt logprobs for request,
+                # 2) Compute sample and prompt logprobs for request,
                 # if required.
                 req_state.logprobs_processor.update_from_output(engine_core_output)
+
+            # 3) Compute stats only after applying the stop boundary, while
+            # preserving the prefill state for first-token accounting.
+            self._update_stats_from_output(
+                req_state, engine_core_output, engine_core_timestamp, iteration_stats
+            )
+            req_state.is_prefilling = False
 
             # 4) Create and handle RequestOutput objects.
             if request_output := req_state.make_request_output(
