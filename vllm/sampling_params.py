@@ -669,6 +669,13 @@ class SamplingParams(
         if speculative_config is None:
             return
 
+        # vllm_tt_plugin's model-owned prompt lookup (method "ngram" on the TT platform) speculates only for
+        # requests its device sampler reproduces exactly and runs plain decode steps for the others, so these
+        # parameters keep working there.
+        from vllm.platforms import current_platform
+
+        if speculative_config.method == "ngram" and current_platform.device_type == "tt":
+            return
         # Some sampling parameters are not yet compatible with spec decoding.
         if self.min_tokens > 1 or self.min_p > _SAMPLING_EPS or self.logit_bias:
             raise ValueError(

@@ -197,8 +197,12 @@ def build_logitsprocs(
         )
         return LogitsProcessors()
 
-    # Check if speculative decoding is enabled.
-    if vllm_config.speculative_config:
+    # Check if speculative decoding is enabled.  vllm_tt_plugin's model-owned prompt lookup (method "ngram" on the
+    # TT platform) runs plain host-sampled steps for requests with these parameters, so it keeps them.
+    from vllm.platforms import current_platform
+
+    spec = vllm_config.speculative_config
+    if spec and not (spec.method == "ngram" and current_platform.device_type == "tt"):
         if custom_logitsprocs:
             raise ValueError(STR_SPEC_DEC_REJECTS_LOGITSPROCS)
         logger.warning(
