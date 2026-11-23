@@ -343,6 +343,10 @@ class OpenAIServingChat(OpenAIServing):
         except RuntimeError as e:
             logger.exception("Error in reasoning parser creation.")
             return self.create_error_response(str(e))
+        # A reasoning parser may adjust the request like a tool parser does (e.g. keep special tokens in the
+        # output text when its delimiters are special tokens).
+        if reasoning_parser is not None and hasattr(reasoning_parser, "adjust_request"):
+            request = reasoning_parser.adjust_request(request)
         result = await self.render_chat_request(request)
         if isinstance(result, ErrorResponse):
             return result
@@ -1060,6 +1064,7 @@ class OpenAIServingChat(OpenAIServing):
                         assert tool_parser is not None
                         assert added_content_delta_arr is not None
                         assert reasoning_end_arr is not None
+                        reasoning_tail = None
                         output_token_ids = as_list(output.token_ids)
                         if not reasoning_end_arr[i]:
                             # When encountering think end id in prompt_token_ids
@@ -1092,6 +1097,9 @@ class OpenAIServingChat(OpenAIServing):
                                             output_token_ids
                                         )
                                     )
+                                    reasoning_tail = (
+                                        delta_message.reasoning if delta_message else None
+                                    )
                                     if delta_message and delta_message.content:
                                         current_text = delta_message.content
                                         delta_message.content = None
@@ -1122,6 +1130,12 @@ class OpenAIServingChat(OpenAIServing):
                             )
                             if delta_message and delta_message.tool_calls:
                                 tools_streamed[i] = True
+                            # The delta that ended the reasoning can also hold the
+                            # last reasoning text (several tokens per step, e.g.
+                            # speculative decoding): keep it with the tool result.
+                            if reasoning_tail:
+                                delta_message = delta_message or DeltaMessage()
+                                delta_message.reasoning = reasoning_tail
                     # when only tool calls
                     elif tool_choice_auto:
                         assert tool_parser is not None
@@ -1257,6 +1271,8 @@ class OpenAIServingChat(OpenAIServing):
                                 delta_message, output
                             )
                             and tool_parser
+                            # (rebuilding the delta would drop its reasoning)
+                            and not delta_message.reasoning
                         ):
                             latest_delta_len = 0
                             if (
