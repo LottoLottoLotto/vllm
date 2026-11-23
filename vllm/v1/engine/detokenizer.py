@@ -100,7 +100,8 @@ class BaseIncrementalDetokenizer(IncrementalDetokenizer, ABC):
             1) Detokenize the new token ids incrementally.
             2) Evaluate stop criteria.
 
-        Return matched stop string or None.
+        Return matched stop string or None. Only retain tokens through the
+        first token that completes a stop string, even in a speculative batch.
         """
         if not new_token_ids:
             # Skip detokenization if no new token ids.
@@ -114,34 +115,32 @@ class BaseIncrementalDetokenizer(IncrementalDetokenizer, ABC):
         else:
             skipped_stop_token_id = None
 
-        # 1) Detokenize the new token ids incrementally.
-        stop_check_offset = len(self.output_text)
+        # Check after each decoded token so a speculative batch stops at the
+        # same token boundary as consecutive one-token updates. decode_next
+        # retains incomplete UTF-8 internally until it can emit valid text.
         for new_token_id in new_token_ids:
             self.token_ids.append(new_token_id)
-            self.output_text += self.decode_next(new_token_id)
+            decoded_text = self.decode_next(new_token_id)
+            self.output_text += decoded_text
             # Support min_tokens, see https://github.com/vllm-project/vllm/pull/22014
-            if self.min_tokens and self.num_output_tokens() <= self.min_tokens:
-                stop_check_offset = len(self.output_text)
+            if self.stop and self.num_output_tokens() > self.min_tokens:
+                stop = check_stop_strings(
+                    output_text=self.output_text,
+                    new_char_count=len(decoded_text),
+                    stop=self.stop,
+                    include_in_output=self.include_stop_str_in_output,
+                )
+                if stop is not None:
+                    stop_string, truncate_to = stop
+                    if truncate_to != -1:
+                        self.output_text = self.output_text[:truncate_to]
+                    return stop_string
 
         if skipped_stop_token_id is not None:
             # Cleanup after skipping detokenization.
             self.token_ids.append(skipped_stop_token_id)
 
-        # 2) Evaluate stop strings.
-        stop_string = None
-        if self.stop and self.num_output_tokens() > self.min_tokens:
-            stop = check_stop_strings(
-                output_text=self.output_text,
-                new_char_count=len(self.output_text) - stop_check_offset,
-                stop=self.stop,
-                include_in_output=self.include_stop_str_in_output,
-            )
-            if stop is not None:
-                stop_string, truncate_to = stop
-                if truncate_to != -1:
-                    self.output_text = self.output_text[:truncate_to]
-
-        return stop_string
+        return None
 
     @abstractmethod
     def decode_next(self, next_token_id: int) -> str:

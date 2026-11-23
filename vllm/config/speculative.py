@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
 import ast
+import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from pydantic import Field, SkipValidation, model_validator
@@ -46,6 +48,7 @@ MTPModelTypes = Literal[
 ]
 EagleModelTypes = Literal["eagle", "eagle3", MTPModelTypes]
 SpeculativeMethod = Literal[
+    "gemma4_assistant",
     "ngram",
     "medusa",
     "mlp_speculator",
@@ -181,6 +184,8 @@ class SpeculativeConfig:
         # Eagle3 affects the computation graph because it returns intermediate
         # hidden states in addition to the final hidden state.
         factors.append(self.method == "eagle3")
+        if self.method == "gemma4_assistant":
+            factors.extend((self.method, self.model, self.num_speculative_tokens))
         hash_str = safe_hash(str(factors).encode(), usedforsecurity=False).hexdigest()
         return hash_str
 
@@ -304,6 +309,10 @@ class SpeculativeConfig:
         # will be detected automatically if possible. If the speculative method
         # can not be detected, it will be considered as the "draft_model" by
         # default.
+
+        if self.method == "gemma4_assistant":
+            self._validate_native_tt_gemma4_assistant()
+            return self
 
         if self.method in get_args(MTPModelTypes) and self.method != "mtp":
             logger.warning(
@@ -726,6 +735,40 @@ class SpeculativeConfig:
         self.verify_equal_vocab_size_if_draft_model()
         return self
 
+    def _validate_native_tt_gemma4_assistant(self):
+        """Exact greedy speculation of the TT single-user gemma-4 runtime: the TT model owns the
+        it-assistant drafter and drafts/verifies inside one device trace per step. The scheduler only
+        reserves ``num_speculative_tokens`` verify rows per step (placeholder draft ids); the runner
+        returns the committed tokens (accepted drafts + the target token). No generic ModelConfig is
+        built for the drafter."""
+        from vllm.platforms import current_platform
+
+        if current_platform.device_type != "tt":
+            raise ValueError("method=gemma4_assistant is supported only by the native TT runner")
+        if self.target_model_config is None or self.target_parallel_config is None:
+            raise ValueError("gemma4_assistant requires the target model and parallel configuration")
+        if not self.model:
+            raise ValueError("gemma4_assistant requires the local drafter checkpoint directory as model")
+        with (Path(self.model) / "config.json").open() as config_file:
+            draft = json.load(config_file)
+        if draft.get("model_type") != "gemma4_unified_assistant":
+            raise ValueError("gemma4_assistant requires a gemma4_unified_assistant drafter checkpoint")
+        if (self.target_parallel_config.tensor_parallel_size != 1
+                or self.target_parallel_config.pipeline_parallel_size != 1
+                or self.target_parallel_config.data_parallel_size != 1
+                or self.draft_tensor_parallel_size not in (None, 1)):
+            raise ValueError("gemma4_assistant requires single-device parallelism")
+        if (self.parallel_drafting or self.speculative_token_tree is not None
+                or self.quantization is not None or self.revision is not None
+                or self.code_revision is not None or self.draft_load_config is not None
+                or self.disable_padded_drafter_batch):
+            raise ValueError("generic drafter options are not supported by gemma4_assistant")
+        self.max_model_len = self.target_model_config.max_model_len
+        self.draft_tensor_parallel_size = 1
+        self.prompt_lookup_min = self.prompt_lookup_max = 0
+        self.draft_model_config = None
+        self.draft_parallel_config = None
+
     def verify_equal_vocab_size_if_draft_model(self):
         if (
             self.method == "draft_model"
@@ -751,6 +794,9 @@ class SpeculativeConfig:
 
     def __repr__(self) -> str:
         method = self.method
-        model = None if method in ("ngram", "suffix") else self.draft_model_config.model
+        model = (
+            self.model if method == "gemma4_assistant" else
+            None if method in ("ngram", "suffix") else self.draft_model_config.model
+        )
         num_spec_tokens = self.num_speculative_tokens
         return f"SpeculativeConfig({method=}, {model=}, {num_spec_tokens=})"
