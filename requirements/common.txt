@@ -4,6 +4,13 @@
 # do not apply to a wheel/path vLLM.  torch / torchvision / numpy pinned here too (ttnn's numpy<2, CPU torch 2.11.0).
 torch == 2.11.0
 numpy == 1.26.4
+# The Qwen3.5 runtime imports vLLM's qwen3_5 / qwen3_vl modules (transformers' Qwen2-VL image processor needs
+# torchvision) and tt-metal's models.common.utility_functions (imports pytest at module level); both are in the
+# release python_env.
+torchvision == 0.26.0
+pytest == 9.0.3
+iniconfig == 2.3.0
+pluggy == 1.6.0
 regex == 2026.7.19
 cachetools == 7.1.7
 psutil == 7.2.2
