@@ -60,10 +60,10 @@ model-hosting-container-standards == 0.1.16
 mcp == 2.0.0
 grpcio == 1.83.0
 grpcio-reflection == 1.83.0
-# Transitive packages of the resolution above, pinned to the same validated environment (dev-25 python_env): a
+# Transitive packages of the resolution above, pinned to the same validated environment (the release python_env): a
 # free resolution drifted 62 of them, e.g. huggingface-hub 1.16.1 -> 1.33.0, whose offline snapshot_download refuses
 # the allow_patterns-pinned snapshot tt-model prefetches (IncompleteSnapshotError in vLLM's get_model_path).
-# Not pinned: pyjwt (dev-25 has 2.7.0, which violates mcp 2.0.0's pyjwt>=2.10.1; pip check flags it there too).
+# Not pinned: pyjwt (the release env has 2.7.0, which violates mcp 2.0.0's pyjwt>=2.10.1; pip check flags it too).
 annotated-doc == 0.0.5
 anyio == 4.14.2
 certifi == 2026.7.22
