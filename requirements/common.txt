@@ -4,6 +4,10 @@
 # torch 2.11.0; torchvision for the Qwen3-VL image and video processors).
 torch == 2.11.0
 torchvision == 0.26.0
+# models.common.utility_functions (imported by the runtime) imports pytest at module level.
+pytest == 9.0.3
+pluggy == 1.6.0
+iniconfig == 2.3.0
 numpy == 1.26.4
 regex == 2026.7.19
 cachetools == 7.1.7
